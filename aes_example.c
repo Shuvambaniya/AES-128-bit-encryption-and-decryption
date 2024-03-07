@@ -6,39 +6,43 @@
 #include <stdlib.h>
 
 #define MAX_INPUT_LENGTH 128
-#define AES_KEY_SIZE 16  // AES-128 is using a 16-byte key.
-#define AES_IV_SIZE 16   // AES is using a 16-byte IV.
+#define AES_KEY_SIZE 16  // AES-128 uses a 16-byte key.
+#define AES_IV_SIZE 16   // AES uses a 16-byte IV.
 #define AES_BLOCK_SIZE 16 // Defines the AES block size as 16 bytes.
 
+// Function to handle OpenSSL errors
 void handleErrors() 
 {
-    ERR_print_errors_fp(stderr);
-    exit(1);
+    ERR_print_errors_fp(stderr); // Print OpenSSL errors to stderr
+    exit(1); // Exit the program with an error code
 }
 
+// Function to convert hexadecimal string to binary data
 int hex2bin(const char *hex, unsigned char *bin, int bin_max_len) 
 {
     size_t hex_len = strlen(hex);
-    if (hex_len % 2 != 0) return -1;
+    if (hex_len % 2 != 0) return -1; // Invalid hexadecimal length
 
     size_t bin_len = hex_len / 2;
-    if (bin_len > bin_max_len) return -2;
+    if (bin_len > bin_max_len) return -2; // Binary data exceeds maximum length
 
     for (size_t i = 0; i < bin_len; i++) 
     {
-        sscanf(&hex[i * 2], "%2hhx", &bin[i]);
+        sscanf(&hex[i * 2], "%2hhx", &bin[i]); // Convert two hexadecimal characters to a byte
     }
-    return bin_len;
+    return bin_len; // Return the length of binary data
 }
 
+// Function to convert binary data to hexadecimal string
 void bin2hex(const unsigned char *bin, int bin_len, char *hex) 
 {
     for (int i = 0; i < bin_len; i++) 
     {
-        sprintf(&hex[i * 2], "%02x", bin[i]);
+        sprintf(&hex[i * 2], "%02x", bin[i]); // Format each byte as two hexadecimal characters
     }
 }
 
+// Function to encrypt plaintext
 int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
             unsigned char *iv, unsigned char *ciphertext) 
 {
@@ -47,20 +51,20 @@ int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
     int len;
     int ciphertext_len;
 
-    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
+    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors(); // Initialize the cipher context
 
     // Set up the cipher context for AES-128 in CBC mode
     if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv))
-        handleErrors();
+        handleErrors(); // Set encryption parameters
 
     // Encrypt the input plaintext and store the result in the ciphertext buffer
     if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
-        handleErrors();
-    ciphertext_len = len;
+        handleErrors(); // Encrypt the plaintext
+    ciphertext_len = len; // Update ciphertext length
 
     // Finalize the encryption process and store any remaining ciphertext
-    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) handleErrors();
-    ciphertext_len += len;
+    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) handleErrors(); // Finalize encryption
+    ciphertext_len += len; // Update ciphertext length
 
     // Free the allocated EVP cipher context
     EVP_CIPHER_CTX_free(ctx);
@@ -69,7 +73,7 @@ int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
     return ciphertext_len;
 }
 
-
+// Function to decrypt ciphertext
 int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
             unsigned char *iv, unsigned char *plaintext) 
 {
@@ -112,31 +116,35 @@ int main(void)
     char hex_output[2 * sizeof(output) + 1];
     char action;
 
+    // Prompt the user to choose encryption or decryption
     printf("Do you want to encrypt (e) or decrypt (d)? ");
     if (scanf(" %c", &action) != 1) 
     {
-        handleErrors();
+        handleErrors(); // Handle input error
     }
 
     getchar(); // Remove newline from input buffer
 
     if (action == 'e') 
     {
+        // Generate random key and IV
         if (!RAND_bytes(key, sizeof(key)) || !RAND_bytes(iv, sizeof(iv))) 
         {
-            handleErrors();
+            handleErrors(); // Handle error generating random bytes
         }
 
+        // Read plaintext from user
         printf("Enter the plaintext to encrypt: ");
         if (fgets((char *)input, MAX_INPUT_LENGTH, stdin) == NULL) 
         {
-            handleErrors();
+            handleErrors(); // Handle input error
         }
         input[strcspn((char *)input, "\n")] = 0; // Remove newline
 
         int input_len = strlen((char *)input);
         int ciphertext_len = encrypt(input, input_len, key, iv, output);
 
+        // Print key, IV, and ciphertext in hexadecimal format
         printf("Key: ");
         bin2hex(key, sizeof(key), hex_output);
         printf("%s\n", hex_output);
@@ -151,6 +159,7 @@ int main(void)
     } 
     else if (action == 'd') 
     {
+        // Prompt for key, IV, and ciphertext in hexadecimal format
         printf("Enter the key in hex: ");
         scanf("%64s", hex_output);
         if (hex2bin(hex_output, key, sizeof(key)) != AES_KEY_SIZE) 
@@ -176,6 +185,7 @@ int main(void)
             return 1;
         }
 
+        // Decrypt ciphertext and print decrypted plaintext
         int plaintext_len = decrypt(output, output_len, key, iv, input);
         input[plaintext_len] = '\0'; // Null-terminate the decrypted string
         printf("Decrypted text: %s\n", input);
